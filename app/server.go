@@ -35,7 +35,7 @@ func main() {
     if (string(urlPath) == "/") {
         response = "HTTP/1.1 200 OK\r\n\r\n"
     } else if (strings.HasPrefix(urlPath, "/echo/")) {
-        echo := urlPath[6:]
+        echo := strings.TrimPrefix(urlPath, "/echo/")
         response = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", len(echo), echo)
     } else {
         response = "HTTP/1.1 404 Not Found\r\n\r\n"
