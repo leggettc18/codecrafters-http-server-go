@@ -1,10 +1,10 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"net"
 	"os"
+	"strings"
 )
 
 func main() {
@@ -27,14 +27,22 @@ func main() {
     if err != nil {
         fmt.Println("Error reading request")
     }
-    reqLines := bytes.Split(buffer, []byte("\r\n"))
-    reqLine := bytes.Split(reqLines[0], []byte(" "))
+    reqLines := strings.Split(string(buffer), "\r\n")
+    reqLine := strings.Split(reqLines[0], " ")
     urlPath := reqLine[1];
 
+    var response string
     if (string(urlPath) == "/") {
-        conn.Write([]byte("HTTP/1.1 200 OK\r\n\r\n"))
+        response = "HTTP/1.1 200 OK\r\n\r\n"
+    } else if (strings.HasPrefix(urlPath, "/echo/")) {
+        echo := urlPath[6:]
+        response = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", len(echo), echo)
     } else {
-        conn.Write([]byte("HTTP/1.1 404 Not Found\r\n\r\n"))
+        response = "HTTP/1.1 404 Not Found\r\n\r\n"
     }
-    
+    _, err = conn.Write([]byte(response))
+    if err != nil {
+        fmt.Println("Error writing data: ", err.Error())
+        os.Exit(1)
+    }
 }
