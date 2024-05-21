@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"net"
 	"os"
@@ -21,7 +22,19 @@ func main() {
 		fmt.Println("Error accepting connection: ", err.Error())
 		os.Exit(1)
 	}
+    buffer := make([]byte, 1024)
+    _, err = conn.Read(buffer)
+    if err != nil {
+        fmt.Println("Error reading request")
+    }
+    reqLines := bytes.Split(buffer, []byte("\r\n"))
+    reqLine := bytes.Split(reqLines[0], []byte(" "))
+    urlPath := reqLine[1];
 
-    conn.Write([]byte("HTTP/1.1 200 OK\r\n\r\n"))
+    if (string(urlPath) == "/") {
+        conn.Write([]byte("HTTP/1.1 200 OK\r\n\r\n"))
+    } else {
+        conn.Write([]byte("HTTP/1.1 404 Not Found\r\n\r\n"))
+    }
     
 }
