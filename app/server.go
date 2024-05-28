@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io/fs"
-	"io/ioutil"
 	"net"
 	"os"
 	"strings"
@@ -16,6 +15,25 @@ type Request struct {
     body string
 }
 
+type Response struct {
+    code int
+    message string
+    headerMap map[string]string
+    body string
+}
+
+func (self Response) Print() string {
+    response := fmt.Sprintf("HTTP/1.1 %d %s\r\n", self.code, self.message)
+    for key, value := range self.headerMap {
+        response += fmt.Sprintf("%s: %s\r\n", key, value)
+    }
+    response += "\r\n"
+    if (self.body != "") {
+        response += fmt.Sprintf("%s", self.body)
+    }
+    return response
+}
+
 func handleConnection(conn net.Conn) {
     buffer := make([]byte, 1024)
     n, err := conn.Read(buffer)
@@ -26,48 +44,65 @@ func handleConnection(conn net.Conn) {
 
     request, _ := Parse(buffer)
 
-    response := "HTTP/1.1 404 Not Found\r\n\r\n"
+    response := Response{ code: 404, message: "Not Found", headerMap: make(map[string]string), body: "" }
+    if (request.headerMap["Accept-Encoding"] == "gzip") {
+        response.headerMap["Content-Encoding"] = request.headerMap["Accept-Encoding"]
+    }
     if (request.method == "GET") {
         if (request.url == "/") {
-            response = "HTTP/1.1 200 OK\r\n\r\n"
+            response.code = 200
+            response.message = "OK"
         } else if (strings.HasPrefix(request.url, "/echo/")) {
             echo := strings.TrimPrefix(request.url, "/echo/")
-            response = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", len(echo), echo)
+            response.code = 200
+            response.message = "OK"
+            response.headerMap["Content-Type"] = "text/plain"
+            response.headerMap["Content-Length"] = fmt.Sprintf("%d", len(echo))
+            response.body = fmt.Sprintf("%s", echo)
         } else if (strings.HasPrefix(request.url, "/files/")) {
             directory := os.Args[2]
             fileName := strings.TrimPrefix(request.url, "/files/")
             data, err := os.ReadFile(directory + fileName)
             if err != nil {
                 fmt.Fprintf(os.Stderr, "Error reading file %s: %s", fileName, err.Error())
-                response = "HTTP/1.1 404 Not Found\r\n\r\n"
             } else {
                 contents := string(data)
-                response = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: %d\r\n\r\n%s", len(contents), contents)
+                response.code = 200
+                response.message = "OK"
+                response.headerMap["Content-Type"] = "application/octet-stream"
+                response.headerMap["Content-Length"] = fmt.Sprintf("%d", len(contents))
+                response.body = contents
             }
         } else if (request.url == "/user-agent") {
             userAgent := request.headerMap["User-Agent"]
             if (userAgent == "") {
-                response = "HTTP/1.1 400 Bad Request\r\n\r\n"
+                response.code = 400
+                response.message = "Bad Request"
             } else {
-                response = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", len(userAgent), userAgent)
+                response.code = 200
+                response.message = "OK"
+                response.headerMap["Content-Type"] = "text/plain"
+                response.headerMap["Content-Length"] = fmt.Sprintf("%d", len(userAgent))
+                response.body = userAgent
             }
         }
     } else if (request.method == "POST") {
         if (strings.HasPrefix(request.url, "/files/")) {
             directory := os.Args[2]
             filename := strings.TrimPrefix(request.url, "/files/")
-            ioutil.WriteFile(directory + "/" + filename, []byte(request.body), fs.FileMode(777))
-            response = "HTTP/1.1 201 Created\r\n\r\n"
+            os.WriteFile(directory + "/" + filename, []byte(request.body), fs.FileMode(777))
+            response.code = 201
+            response.message = "Created"
 
         }
     }
-    _, err = conn.Write([]byte(response))
+    _, err = conn.Write([]byte(response.Print()))
 }
 
 func Parse(buffer []byte) (Request, error) {
     rawBody := strings.Split(string(buffer), "\r\n\r\n")
     reqLines := strings.Split(rawBody[0], "\r\n")
-    headers := reqLines[1:len(reqLines)]
+    headers := reqLines[1:]
     headerMap := make(map[string]string)
     for _, header := range headers {
         values := strings.Split(header, ": ")
