@@ -45,8 +45,13 @@ func handleConnection(conn net.Conn) {
     request, _ := Parse(buffer)
 
     response := Response{ code: 404, message: "Not Found", headerMap: make(map[string]string), body: "" }
-    if (request.headerMap["Accept-Encoding"] == "gzip") {
-        response.headerMap["Content-Encoding"] = request.headerMap["Accept-Encoding"]
+    if (request.headerMap["Accept-Encoding"] != "") {
+        encodings := strings.Split(request.headerMap["Accept-Encoding"], ", ")
+        for _, encoding := range encodings {
+            if (encoding == "gzip") {
+                response.headerMap["Content-Encoding"] = encoding
+            }
+        }
     }
     if (request.method == "GET") {
         if (request.url == "/") {
