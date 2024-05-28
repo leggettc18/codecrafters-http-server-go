@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"fmt"
 	"io/fs"
 	"net"
@@ -24,6 +26,16 @@ type Response struct {
 
 func (self Response) Print() string {
     response := fmt.Sprintf("HTTP/1.1 %d %s\r\n", self.code, self.message)
+    if (self.body != "") {
+        if (self.headerMap["Content-Encoding"] == "gzip") {
+            bodyBuf := new(bytes.Buffer)
+            gzw := gzip.NewWriter(bodyBuf)
+            gzw.Write([]byte(self.body))
+            gzw.Close()
+            self.body = string(bodyBuf.Bytes())
+        }
+        self.headerMap["Content-Length"] = fmt.Sprintf("%d", len(self.body))
+    }
     for key, value := range self.headerMap {
         response += fmt.Sprintf("%s: %s\r\n", key, value)
     }
@@ -62,7 +74,6 @@ func handleConnection(conn net.Conn) {
             response.code = 200
             response.message = "OK"
             response.headerMap["Content-Type"] = "text/plain"
-            response.headerMap["Content-Length"] = fmt.Sprintf("%d", len(echo))
             response.body = fmt.Sprintf("%s", echo)
         } else if (strings.HasPrefix(request.url, "/files/")) {
             directory := os.Args[2]
@@ -75,7 +86,6 @@ func handleConnection(conn net.Conn) {
                 response.code = 200
                 response.message = "OK"
                 response.headerMap["Content-Type"] = "application/octet-stream"
-                response.headerMap["Content-Length"] = fmt.Sprintf("%d", len(contents))
                 response.body = contents
             }
         } else if (request.url == "/user-agent") {
@@ -87,7 +97,6 @@ func handleConnection(conn net.Conn) {
                 response.code = 200
                 response.message = "OK"
                 response.headerMap["Content-Type"] = "text/plain"
-                response.headerMap["Content-Length"] = fmt.Sprintf("%d", len(userAgent))
                 response.body = userAgent
             }
         }
