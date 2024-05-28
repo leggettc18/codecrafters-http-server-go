@@ -24,18 +24,23 @@ type Response struct {
     body string
 }
 
-func (self Response) Print() string {
-    response := fmt.Sprintf("HTTP/1.1 %d %s\r\n", self.code, self.message)
-    if (self.body != "") {
+func (self *Response) SetBody(body string) {
+    if (body != "") {
         if (self.headerMap["Content-Encoding"] == "gzip") {
-            bodyBuf := new(bytes.Buffer)
-            gzw := gzip.NewWriter(bodyBuf)
-            gzw.Write([]byte(self.body))
+            var bodyBuf bytes.Buffer
+            gzw := gzip.NewWriter(&bodyBuf)
+            gzw.Write([]byte(body))
             gzw.Close()
             self.body = string(bodyBuf.Bytes())
+        } else {
+            self.body = body
         }
         self.headerMap["Content-Length"] = fmt.Sprintf("%d", len(self.body))
     }
+}
+
+func (self *Response) Print() string {
+    response := fmt.Sprintf("HTTP/1.1 %d %s\r\n", self.code, self.message)
     for key, value := range self.headerMap {
         response += fmt.Sprintf("%s: %s\r\n", key, value)
     }
@@ -74,7 +79,7 @@ func handleConnection(conn net.Conn) {
             response.code = 200
             response.message = "OK"
             response.headerMap["Content-Type"] = "text/plain"
-            response.body = fmt.Sprintf("%s", echo)
+            response.SetBody(echo)
         } else if (strings.HasPrefix(request.url, "/files/")) {
             directory := os.Args[2]
             fileName := strings.TrimPrefix(request.url, "/files/")
@@ -86,7 +91,7 @@ func handleConnection(conn net.Conn) {
                 response.code = 200
                 response.message = "OK"
                 response.headerMap["Content-Type"] = "application/octet-stream"
-                response.body = contents
+                response.SetBody(contents)
             }
         } else if (request.url == "/user-agent") {
             userAgent := request.headerMap["User-Agent"]
@@ -97,7 +102,7 @@ func handleConnection(conn net.Conn) {
                 response.code = 200
                 response.message = "OK"
                 response.headerMap["Content-Type"] = "text/plain"
-                response.body = userAgent
+                response.SetBody(userAgent)
             }
         }
     } else if (request.method == "POST") {
